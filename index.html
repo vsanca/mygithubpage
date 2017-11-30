@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <title>Data processing test</title>
+  </head>
+  <body>
+    <script>
+
+        var years_genres;
+        var raw;
+        var blues;
+        var jazz;
+
+        d3.json("https://drive.switch.ch/index.php/s/EmL1gha55ue6OZd/download", function(data){
+
+          raw = data;
+          years_genres = processData(data);
+
+          all_main_genres = getMainGenres(years_genres);
+          all_subgenres = getGenres(years_genres);
+
+          useful = constructDataMainGenres(years_genres);
+          useful2 = constructDataMainGenresWide(years_genres);
+
+          blues = getSubgenres(years_genres, "Blues");
+          jazz = getSubgenres(years_genres, "Jazz")
+        });
+
+        /*d3.json("http://localhost:8010/mjf_dump_201703/kirell/concerts.json", function(data){
+
+          raw = data;
+          years_genres = processData(data);
+
+          all_main_genres = getMainGenres(years_genres);
+          all_subgenres = getGenres(years_genres);
+
+          useful = constructDataMainGenres(years_genres);
+          useful2 = constructDataMainGenresWide(years_genres);
+
+          blues = getSubgenres(years_genres, "Blues");
+          jazz = getSubgenres(years_genres, "Jazz")
+        });*/
+
+        function processData(data) {
+          var nested2 = d3.nest()
+            .key(d => {
+              var date = new Date(d.date);
+              return date.getFullYear();
+            })
+            .rollup(leaves => {
+              var leaf = leaves.map(x => {
+                return {'MG': x.mainGenres.map(x => {return {'mainGenre': x,'count': 1}}),
+                        'G': x.genres.map(x => {return {'genres': x,'count': 1}})}
+              })
+              .reduce((prevVal, elem) => {
+                var newVal = prevVal;
+
+                //main genres
+                elem['MG'].forEach(el => {
+                  if(newVal['mainGenres'][el.mainGenre]==undefined){
+                    newVal['mainGenres'][el.mainGenre] = +el.count;
+                  }
+                  else {
+                    newVal['mainGenres'][el.mainGenre] += +el.count;
+                  }
+                });
+
+                //genres
+                elem['G'].forEach(el => {
+                  if(newVal['genres'][el.genres]==undefined){
+                    newVal['genres'][el.genres] = +el.count;
+                  }
+                  else {
+                    newVal['genres'][el.genres] += +el.count;
+                  }
+                });
+
+                return newVal;
+              }, {'mainGenres':{}, 'genres':{}});
+
+              return leaf;
+            })
+            .entries(data['concerts'])
+            .reduce((prevVal, elem) => {
+              var newVal = prevVal;
+              newVal[elem.key] = elem.value;
+              return newVal;
+            }, new Object());
+
+            return nested2;
+        }
+
+        function getMainGenres(data) {
+          var MGList = [];
+          Object.keys(data).forEach(year => {
+              Object.keys(data[year].mainGenres).forEach(mainG => {
+                if(!MGList.includes(mainG))
+                  MGList.push(mainG)
+              })
+          });
+
+          return MGList;
+        }
+
+        function getGenres(data) {
+          var GList = [];
+          Object.keys(data).forEach(year => {
+            Object.keys(data[year].genres).forEach(genre => {
+              if(!GList.includes(genre))
+                GList.push(genre)
+            })
+          });
+
+          return GList;
+        }
+
+        function constructDataMainGenres(data) {
+          var main_genres = getMainGenres(data);
+          var objArr = [];
+
+          Object.keys(data).forEach(year => {
+            main_genres.forEach(mg => {
+              var obj = {};
+              obj['year']=year;
+              obj['genre']=mg;
+              if(data[year].mainGenres[mg]==undefined){
+                obj['count'] = 0;
+              }
+              else {
+                obj['count'] = data[year].mainGenres[mg];
+              }
+
+              objArr.push(obj);
+            })
+          });
+
+          return objArr;
+        }
+
+        function constructDataMainGenresWide(data) {
+          var main_genres = getMainGenres(data);
+          var objArr = [];
+
+          Object.keys(data).forEach(year => {
+            var obj = {};
+            main_genres.forEach(mg => {
+
+              obj['year']=year;
+
+              if(data[year].mainGenres[mg]==undefined){
+                obj[mg] = 0;
+              }
+              else {
+                obj[mg] = data[year].mainGenres[mg];
+              }
+
+            })
+            objArr.push(obj);
+          });
+
+          objArr.keys = main_genres;
+          return objArr;
+        }
+
+        function constructDataGenresWide(data, genre_list) {
+          var genres = genre_list;
+          var objArr = [];
+
+          Object.keys(data).forEach(year => {
+            var obj = {};
+            genres.forEach(g => {
+
+              obj['year']=year;
+
+              if(data[year].genres[g]==undefined){
+                obj[g] = 0;
+              }
+              else {
+                obj[g] = data[year].genres[g];
+              }
+
+            })
+            objArr.push(obj);
+          });
+
+          objArr.keys = genres;
+          return objArr;
+        }
+
+        function getSubgenres(data, genre) {
+          var genre_list = genre_tree[genre];
+
+          return constructDataGenresWide(data, genre_list);
+        }
+
+        const genre_tree = {
+            'Blues': ['Blues','Boogie-woogie',],
+            'Classical': ['Avant-garde','Classical','Opera','Soundtrack',],
+            'Country': ['Bluegrass','Country','Minimal',],
+            'Electronic': ['Ambient','Breakbeat','Downtempo','Electronica','Hardcore',
+                          'House','New-age','Techno','Trip hop',],
+            'Folk': ['Folk','Folk rock','Indie folk',],
+            'Hip-hop': ['Alternative hip hop','Gangsta rap','Hip-hop','Rap',],
+            'Jazz': ['Acid jazz','Afro-Cuban jazz','Bebop','Big band','Cool jazz',
+                    'Crossover jazz','Dixieland / New Orleans','Free jazz',
+                    'Gypsy jazz','Hard bop','Jazz','Jazz fusion','Jazz-funk',
+                    'Jazz-rock','Latin jazz','Lounge','Post-bop','Swing',],
+            'Latin': ['Bossa nova','Flamenco','Latin','Salsa','Samba','Tango',],
+            'Other': ['Other', 'Zouk', 'Bebop',],
+            'Pop': ['Dance','French pop / chanson française','Indie pop','Pop',],
+            'R&B / soul': ['Zouk','Dancehall','Disco','Funk','Neo soul','R&B',
+                     'R&B / soul','Reggae','Rhythm and blues','Ska',],
+            'Religious': ['Gospel','Religious','Soul',],
+            'Rock': ['Alternative rock','Black metal','Death metal','Garage rock',
+                    'Grunge','Hard rock','Heavy metal','Indie rock','New wave',
+                    'Post-rock','Progressive rock','Psychedelic rock','Punk rock',
+                    'Rock','Rock & roll','Symphonic metal',],
+            'Vocal': ['A cappella','Vocal',],
+            'World music': ['African','Afrobeat','Asian','Brazilian','Caribbean','Celtic',
+                           'Música popular brasileira (MBP)','World music',]
+        }
+    </script>
+  </body>
+</html>
